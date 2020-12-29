@@ -1,4 +1,2 @@
 # super-k
-Super-k:  A Piecewise Linear Classifier Based on Voronoi Tessellations
-
-[![DOI](https://zenodo.org/badge/321594480.svg)](https://zenodo.org/badge/latestdoi/321594480)
+Super-k:  A Piecewise Linear Classifier Based on Voronoi Tessellations [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4399738.svg)](https://doi.org/10.5281/zenodo.4399738)
