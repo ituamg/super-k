@@ -1,21 +1,21 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from sklearn.datasets import fetch_openml
-from sklearn.model_selection import train_test_split
-
 from super_k.super_k import *
 
-from scipy.optimize import minimize_scalar
-
-from sklearn.model_selection import cross_val_score, GridSearchCV
+from sklearn.datasets import fetch_openml
+from sklearn.model_selection import train_test_split
+from sklearn.model_selection import GridSearchCV
 from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
 
 from tabulate import tabulate
+import timeit
 
-from time import time
+N_REPEAT = 10
+N_NUMBER = 1
 
+TIME_SCALE = 1e-3 # milliseconds
 
 datasets = [
     "optdigits",
@@ -51,32 +51,6 @@ superk_params = {
 }
 
 
-def tune_k(X, y, k_range):
-
-    cache = {}
-
-    def f(x):
-        k = int(round(x))
-
-        try:
-            rate = cache[k]
-        except:
-            spk = SuperK(k)
-            scores = cross_val_score(spk, X, y, cv=5)
-
-            rate = scores.mean()
-            cache[k] = rate
-
-        error = (1.0 - rate) * 1e6 + k
-
-        return error
-
-    res = minimize_scalar(f, bounds=(min(k_range), max(k_range)), method='bounded', options={"disp": 3, "xatol": 1e-1})
-    k = int(round(res.x))
-
-    return k
-
-
 def grid_search_k(X, y, k_range):
 
     params = {'k': k_range}
@@ -88,29 +62,14 @@ def grid_search_k(X, y, k_range):
 
     return k
 
+
 def tvt_main():
 
-    superk_accuracies = {}
-    superk_train_times = {}
-    superk_test_times = {}
+    classifiers = ["superk", "svmlinear", "svmrbf", "svmpoly", "knn"]
 
-    svmlinear_accuracies = {}
-    svmlinear_train_times = {}
-    svmlinear_test_times = {}
-
-    svmrbf_accuracies = {}
-    svmrbf_train_times = {}
-    svmrbf_test_times = {}
-
-    svmpoly_accuracies = {}
-    svmpoly_train_times = {}
-    svmpoly_test_times = {}
-
-    knn_accuracies = {}
-    knn_train_times = {}
-    knn_test_times = {}
-
-
+    accuracies = {clfier : {} for clfier in classifiers} 
+    train_times = {clfier : {} for clfier in classifiers} 
+    test_times = {clfier : {} for clfier in classifiers} 
 
     for item in datasets:
 
@@ -136,103 +95,117 @@ def tvt_main():
                 param_range = k_search_ranges[ds_name]
             except:
                 param_range = k_search_ranges["default"]
-            # k = tune_k(X_train, y_train, param_range)
             k = grid_search_k(X_train, y_train, param_range)
 
-        spk = SuperK(k)
-        t0 = time()
-        for _ in range(10):
-            spk.fit(X_train, y_train, verbose=True)
-        t1 = time()
-        for _ in range(10):
-            accuracy = spk.score(X_test, y_test)
-        t2 = time()
+        clf = SuperK(k)
 
-        superk_accuracies[ds_name] = accuracy
-        superk_train_times[ds_name] = (t1 - t0) * 100
-        superk_test_times[ds_name] = (t2 - t1) * 100
+        train_timer = timeit.Timer(lambda : clf.fit(X_train, y_train, verbose=True))
+        train_results = train_timer.repeat(repeat=N_REPEAT, number=N_NUMBER)
 
-        print("{}\nSuper-k\n{}\nk: {}, n_genpts: {}\nTest score: {}\n{}".format("-" * 40, ds_name, k, spk.n_genpts, accuracy, "-" * 40))
+        accuracy = None
+        def f():
+            nonlocal accuracy
+            accuracy = clf.score(X_test, y_test)
+        test_timer = timeit.Timer(f)
+        test_results = test_timer.repeat(repeat=N_REPEAT, number=N_NUMBER)
+
+        accuracies["superk"][ds_name] = accuracy
+        train_times["superk"][ds_name] = (np.mean(train_results) / TIME_SCALE, np.std(train_results) / TIME_SCALE)
+        test_times["superk"][ds_name] = (np.mean(test_results) / TIME_SCALE, np.std(test_results) / TIME_SCALE)
+
+        print("{}\nSuper-k\n{}\nk: {}, n_genpts: {}\nTest score: {}\n{}".format("-" * 40, ds_name, k, clf.n_genpts, accuracy, "-" * 40))
 
         #### SVM Linear ####
-        svm_linear = SVC(kernel="linear")
-        t0 = time()
-        for _ in range(10):
-            svm_linear.fit(X_train, y_train)
-        t1 = time()
-        for _ in range(10):
-            accuracy = svm_linear.score(X_test, y_test)
-        t2 = time()
+        clf = SVC(kernel="linear")
 
-        svmlinear_accuracies[ds_name] = accuracy
-        svmlinear_train_times[ds_name] = (t1 - t0) * 100
-        svmlinear_test_times[ds_name] = (t2 - t1) * 100
+        train_timer = timeit.Timer(lambda : clf.fit(X_train, y_train))
+        train_results = train_timer.repeat(repeat=N_REPEAT, number=N_NUMBER)
+
+        accuracy = None
+        def f():
+            nonlocal accuracy
+            accuracy = clf.score(X_test, y_test)
+        test_timer = timeit.Timer(f)
+        test_results = test_timer.repeat(repeat=N_REPEAT, number=N_NUMBER)
+
+        accuracies["svmlinear"][ds_name] = accuracy
+        train_times["svmlinear"][ds_name] = (np.mean(train_results) / TIME_SCALE, np.std(train_results) / TIME_SCALE)
+        test_times["svmlinear"][ds_name] = (np.mean(test_results) / TIME_SCALE, np.std(test_results) / TIME_SCALE)
 
         print("{}\nSVM Linear\n{}\nTest score: {}\n{}".format("-" * 40, ds_name, accuracy, "-" * 40))
 
         #### SVM RBF ####
-        svm_rbf = SVC(kernel="rbf")
-        t0 = time()
-        for _ in range(10):
-            svm_rbf.fit(X_train, y_train)
-        t1 = time()
-        for _ in range(10):
-            accuracy = svm_rbf.score(X_test, y_test)
-        t2 = time()
+        clf = SVC(kernel="rbf")
 
-        svmrbf_accuracies[ds_name] = accuracy
-        svmrbf_train_times[ds_name] = (t1 - t0) * 100
-        svmrbf_test_times[ds_name] = (t2 - t1) * 100
+        train_timer = timeit.Timer(lambda : clf.fit(X_train, y_train))
+        train_results = train_timer.repeat(repeat=N_REPEAT, number=N_NUMBER)
+
+        accuracy = None
+        def f():
+            nonlocal accuracy
+            accuracy = clf.score(X_test, y_test)
+        test_timer = timeit.Timer(f)
+        test_results = test_timer.repeat(repeat=N_REPEAT, number=N_NUMBER)
+
+        accuracies["svmrbf"][ds_name] = accuracy
+        train_times["svmrbf"][ds_name] = (np.mean(train_results) / TIME_SCALE, np.std(train_results) / TIME_SCALE)
+        test_times["svmrbf"][ds_name] = (np.mean(test_results) / TIME_SCALE, np.std(test_results) / TIME_SCALE)
 
         print("{}\nSVM RBF\n{}\nTest score: {}\n{}".format("-" * 40, ds_name, accuracy, "-" * 40))
 
         #### SVM Poly ####
-        svm_poly = SVC(kernel="poly")
-        t0 = time()
-        for _ in range(10):
-            svm_poly.fit(X_train, y_train)
-        t1 = time()
-        for _ in range(10):
-            accuracy = svm_poly.score(X_test, y_test)
-        t2 = time()
+        clf = SVC(kernel="poly")
 
-        svmpoly_accuracies[ds_name] = accuracy
-        svmpoly_train_times[ds_name] = (t1 - t0) * 100
-        svmpoly_test_times[ds_name] = (t2 - t1) * 100
+        train_timer = timeit.Timer(lambda : clf.fit(X_train, y_train))
+        train_results = train_timer.repeat(repeat=N_REPEAT, number=N_NUMBER)
+
+        accuracy = None
+        def f():
+            nonlocal accuracy
+            accuracy = clf.score(X_test, y_test)
+        test_timer = timeit.Timer(f)
+        test_results = test_timer.repeat(repeat=N_REPEAT, number=N_NUMBER)
+
+        accuracies["svmpoly"][ds_name] = accuracy
+        train_times["svmpoly"][ds_name] = (np.mean(train_results) / TIME_SCALE, np.std(train_results) / TIME_SCALE)
+        test_times["svmpoly"][ds_name] = (np.mean(test_results) / TIME_SCALE, np.std(test_results) / TIME_SCALE)
 
         print("{}\nSVM Poly\n{}\nTest score: {}\n{}".format("-" * 40, ds_name, accuracy, "-" * 40))
         
         #### KNN ####
-        knn = KNeighborsClassifier()
-        t0 = time()
-        for _ in range(10):
-            knn.fit(X_train, y_train)
-        t1 = time()
-        for _ in range(10):
-            accuracy = knn.score(X_test, y_test)
-        t2 = time()
+        clf = KNeighborsClassifier()
 
-        knn_accuracies[ds_name] = accuracy
-        knn_train_times[ds_name] = (t1 - t0) * 100
-        knn_test_times[ds_name] = (t2 - t1) * 100
+        train_timer = timeit.Timer(lambda : clf.fit(X_train, y_train))
+        train_results = train_timer.repeat(repeat=N_REPEAT, number=N_NUMBER)
+
+        accuracy = None
+        def f():
+            nonlocal accuracy
+            accuracy = clf.score(X_test, y_test)
+        test_timer = timeit.Timer(f)
+        test_results = test_timer.repeat(repeat=N_REPEAT, number=N_NUMBER)
+
+        accuracies["knn"][ds_name] = accuracy
+        train_times["knn"][ds_name] = (np.mean(train_results) / TIME_SCALE, np.std(train_results) / TIME_SCALE)
+        test_times["knn"][ds_name] = (np.mean(test_results) / TIME_SCALE, np.std(test_results) / TIME_SCALE)
 
         print("{}\nKNN\n{}\nTest score: {}\n{}".format("-" * 40, ds_name, accuracy, "-" * 40))
 
 
-    print("Super-k Results:\n{}\n{}\n{}\n".format(superk_accuracies, superk_train_times, superk_test_times))
-    print("Linear SVM Results:\n{}\n{}\n{}\n".format(svmlinear_accuracies, svmlinear_train_times, svmlinear_test_times))
-    print("SVM with RBF kernel results:\n{}\n{}\n{}\n".format(svmrbf_accuracies, svmrbf_train_times, svmrbf_test_times))
-    print("SVM with Poly kernel results:\n{}\n{}\n{}\n".format(svmpoly_accuracies, svmpoly_train_times, svmpoly_test_times))
-    print("KNN results:\n{}\n{}\n{}\n".format(knn_accuracies, knn_train_times, knn_test_times))
+    print("Super-k Results:\n{}\n{}\n{}\n".format(accuracies["superk"], train_times["superk"], test_times["superk"]))
+    print("Linear SVM Results:\n{}\n{}\n{}\n".format(accuracies["svmlinear"], train_times["svmlinear"], test_times["svmlinear"]))
+    print("SVM with RBF kernel results:\n{}\n{}\n{}\n".format(accuracies["svmrbf"], train_times["svmrbf"], test_times["svmrbf"]))
+    print("SVM with Poly kernel results:\n{}\n{}\n{}\n".format(accuracies["svmpoly"], train_times["svmpoly"], test_times["svmpoly"]))
+    print("KNN results:\n{}\n{}\n{}\n".format(accuracies["knn"], train_times["knn"], test_times["knn"]))
 
     accuracy_table = []
 
-    accuracy_table.append([""] + ["{}".format(key) for key, _ in superk_accuracies.items()])
-    accuracy_table.append(["Super-k"] + ["{:4.3f}".format(value) for _, value in superk_accuracies.items()])
-    accuracy_table.append(["SVM Linear"] + ["{:4.3f}".format(value) for _, value in svmlinear_accuracies.items()])
-    accuracy_table.append(["SVM RBF"] + ["{:4.3f}".format(value) for _, value in svmrbf_accuracies.items()])
-    accuracy_table.append(["SVM Poly"] + ["{:4.3f}".format(value) for _, value in svmpoly_accuracies.items()])
-    accuracy_table.append(["KNN"] + ["{:4.3f}".format(value) for _, value in knn_accuracies.items()])
+    accuracy_table.append([""] + ["{}".format(key) for key, _ in accuracies["superk"].items()])
+    accuracy_table.append(["Super-k"] + ["{:.3f}".format(value) for _, value in accuracies["superk"].items()])
+    accuracy_table.append(["SVM Linear"] + ["{:.3f}".format(value) for _, value in accuracies["svmlinear"].items()])
+    accuracy_table.append(["SVM RBF"] + ["{:.3f}".format(value) for _, value in accuracies["svmrbf"].items()])
+    accuracy_table.append(["SVM Poly"] + ["{:.3f}".format(value) for _, value in accuracies["svmpoly"].items()])
+    accuracy_table.append(["KNN"] + ["{:.3f}".format(value) for _, value in accuracies["knn"].items()])
 
     accuracy_latex = tabulate(accuracy_table, tablefmt="latex_raw")
     print(accuracy_latex)
@@ -242,12 +215,12 @@ def tvt_main():
 
     train_times_table = []
 
-    train_times_table.append([""] + ["{}".format(key) for key, _ in superk_train_times.items()])
-    train_times_table.append(["Super-k"] + ["{:8.3f}".format(value) for _, value in superk_train_times.items()])
-    train_times_table.append(["SVM Linear"] + ["{:8.3f}".format(value) for _, value in svmlinear_train_times.items()])
-    train_times_table.append(["SVM RBF"] + ["{:8.3f}".format(value) for _, value in svmrbf_train_times.items()])
-    train_times_table.append(["SVM Poly"] + ["{:8.3f}".format(value) for _, value in svmpoly_train_times.items()])
-    train_times_table.append(["KNN"] + ["{:8.3f}".format(value) for _, value in knn_train_times.items()])
+    train_times_table.append([""] + ["{}".format(key) for key, _ in train_times["superk"].items()])
+    train_times_table.append(["Super-k"] + ["{:.1f}({:.1f})".format(*value) for _, value in train_times["superk"].items()])
+    train_times_table.append(["SVM Linear"] + ["{:.1f}({:.1f})".format(*value) for _, value in train_times["svmlinear"].items()])
+    train_times_table.append(["SVM RBF"] + ["{:.1f}({:.1f})".format(*value) for _, value in train_times["svmrbf"].items()])
+    train_times_table.append(["SVM Poly"] + ["{:.1f}({:.1f})".format(*value) for _, value in train_times["svmpoly"].items()])
+    train_times_table.append(["KNN"] + ["{:.1f}({:.1f})".format(*value) for _, value in train_times["knn"].items()])
 
     train_times_latex = tabulate(train_times_table, tablefmt="latex_raw")
     print(train_times_latex)
@@ -257,12 +230,12 @@ def tvt_main():
 
     test_times_table = []
 
-    test_times_table.append([""] + ["{}".format(key) for key, _ in superk_test_times.items()])
-    test_times_table.append(["Super-k"] + ["{:8.3f}".format(value) for _, value in superk_test_times.items()])
-    test_times_table.append(["SVM Linear"] + ["{:8.3f}".format(value) for _, value in svmlinear_test_times.items()])
-    test_times_table.append(["SVM RBF"] + ["{:8.3f}".format(value) for _, value in svmrbf_test_times.items()])
-    test_times_table.append(["SVM Poly"] + ["{:8.3f}".format(value) for _, value in svmpoly_test_times.items()])
-    test_times_table.append(["KNN"] + ["{:8.3f}".format(value) for _, value in knn_test_times.items()])
+    test_times_table.append([""] + ["{}".format(key) for key, _ in test_times["superk"].items()])
+    test_times_table.append(["Super-k"] + ["{:.1f}({:.1f})".format(*value) for _, value in test_times["superk"].items()])
+    test_times_table.append(["SVM Linear"] + ["{:.1f}({:.1f})".format(*value) for _, value in test_times["svmlinear"].items()])
+    test_times_table.append(["SVM RBF"] + ["{:.1f}({:.1f})".format(*value) for _, value in test_times["svmrbf"].items()])
+    test_times_table.append(["SVM Poly"] + ["{:.1f}({:.1f})".format(*value) for _, value in test_times["svmpoly"].items()])
+    test_times_table.append(["KNN"] + ["{:.1f}({:.1f})".format(*value) for _, value in test_times["knn"].items()])
 
     test_times_latex = tabulate(test_times_table, tablefmt="latex_raw")
     print(test_times_latex)
@@ -270,7 +243,6 @@ def tvt_main():
     with open('test_times_table.tex', "w") as f:
         f.write(test_times_latex)
 
-    
 
 if __name__ == "__main__":
     tvt_main()
