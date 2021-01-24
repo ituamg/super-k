@@ -18,7 +18,7 @@ algorithm comes from this simplicity.
 
 # Dependencies
 
-## For the Super-k only
+## For Super-k only
 
 - numpy
 
@@ -44,4 +44,22 @@ using synthetic dataset tools of the Scikit-Learn.
 python test_moons.py
 python test_circles.py
 python test_random.py
+```
+
+## Generation of tables:
+
+```
+python train_validate_test.py
+```
+
+## Training steps:
+
+```
+python voxel_em_correct.py
+```
+
+## Voxels, voxel means:
+
+```
+python show_voxels_grids.py
 ```
