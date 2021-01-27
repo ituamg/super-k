@@ -1,7 +1,7 @@
 # super-k
 Super-k:  A Piecewise Linear Classifier Based on Voronoi Tessellations  
-[![DOI](images/zenodo.4399738.svg)](https://doi.org/10.5281/zenodo.4399738)
-[![arXiv](images/arXiv_2012.15492v1.svg)](https://arxiv.org/abs/2012.15492v1)
+[![DOI](images/zenodo.4460307.svg)](https://doi.org/10.5281/zenodo.4460307)
+[![arXiv](images/arXiv_2012.15492v2.svg)](https://arxiv.org/abs/2012.15492v2)
 
 [comment]: # (arXiv.org non-official badge https://github.com/zsxoff/arxiv-badge)
 
