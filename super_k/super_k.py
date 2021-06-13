@@ -20,11 +20,11 @@ def likelihood(X: np.ndarray, M: np.ndarray):
     return X @ M.T - 0.5 * (M**2).sum(axis=1)
 
 
-def quantize(X, n_steps):
+def quantize(X, n_steps, eps=1e-15):
     x_min = X.min(axis=0)
     x_max = X.max(axis=0)
     resolution = (x_max - x_min) / n_steps
-    X_q = np.clip((X - x_min) / resolution, None, n_steps - 1).astype(int)
+    X_q = np.clip((X - x_min) / (resolution + eps), None, n_steps - 1).astype(int)
     X_q[:,resolution == 0] = 0 # correction for NaNs happening because of 0 / 0
     return X_q, resolution, x_min
 
