@@ -9,8 +9,7 @@ This is the reference implementation of the Super-k algorithm. The Super-k
 algorithm is a Piecewise-Linear (PWL) classification algorithm. It generates a
 set of test points based on the Voronoi region idea, which are called generator points.
 Then these class labeled test points can be effectively used for classification
-of an input, in a SIMD fashion. Inference performance advantage of the Super-k
-algorithm comes from this simplicity.
+of an input, in a SIMD fashion.
 
 ![Classification on 2 class moons](images/moons_1.png)
 ![Classification on 2 class circles](images/circles_1.png)
